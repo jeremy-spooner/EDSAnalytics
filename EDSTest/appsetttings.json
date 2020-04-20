@@ -1,0 +1,6 @@
+{
+  "EDSPort": "EDSPerformanceTenant",
+  "Username": "REPLACE_WITH_APPLICATION_IDENTIFIER",
+  "Password": "REPLACE_WITH_APPLICATION_SECRET",
+  "ApiVersion": "v1"
+}
