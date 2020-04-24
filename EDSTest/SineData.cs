@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace EDSTest
+namespace EDSFilter
 {
     class SineData
     {

@@ -14,7 +14,7 @@ namespace EDSFilterTest
         [Fact]
         public void Test1()
         {
-            Assert.True(EDSTest.Program.MainAsync(true).Result);
+            Assert.True(EDSFilter.Program.MainAsync(true).Result);
             /*
             Console.WriteLine("Getting configuration from appsettings.json");
             IConfigurationBuilder builder = new ConfigurationBuilder()

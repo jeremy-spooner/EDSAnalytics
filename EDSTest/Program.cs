@@ -9,7 +9,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Json;
 
-namespace EDSTest
+namespace EDSFilter
 {
     public class Program
     {
