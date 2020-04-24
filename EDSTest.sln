@@ -5,7 +5,7 @@ VisualStudioVersion = 16.0.29905.134
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EDSTest", "EDSTest\EDSTest.csproj", "{813E0B51-5AF2-4C10-B22E-C1F85519B4B8}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EDSTestTests", "EDSTestTests\EDSTestTests.csproj", "{17DA6626-F5FC-4462-A71E-D8B2463104B0}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EDSFilterTest", "EDSTestTests\EDSFilterTest.csproj", "{17DA6626-F5FC-4462-A71E-D8B2463104B0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

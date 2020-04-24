@@ -11,7 +11,7 @@ using Microsoft.Extensions.Configuration.Json;
 
 namespace EDSTest
 {
-    class Program
+    public class Program
     {
 
         public static void Main()
@@ -33,13 +33,12 @@ namespace EDSTest
             string namespaceId = configuration["NamespaceId"];
             string apiVersion = configuration["apiVersion"];
 
-
             using (HttpClient httpClient = new HttpClient())
             {
                 httpClient.DefaultRequestHeaders.Add("Accept-Encoding", "gzip");
                 try
                 {
-                    // step 1 
+                    // Step 1 
                     // create Timestamp property
                     SdsTypeProperty timestamp = new SdsTypeProperty
                     {
@@ -82,7 +81,7 @@ namespace EDSTest
                         await httpClient.PostAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Types/{sineWaveType.Id}", type);
                     CheckIfResponseWasSuccessful(responseType);
 
-                    // step 2
+                    // Step 2
                     // create sine wave stream                   
                     SdsStream sineWaveStream = new SdsStream
                     {
@@ -97,8 +96,8 @@ namespace EDSTest
                         await httpClient.PostAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{sineWaveStream.Id}", stream);
                     CheckIfResponseWasSuccessful(responseStream);
                     
-                    // step 3  
-                    // create events with a sine wave of doubles ranging from -1 to 1
+                    // Step 3  
+                    // create events with a sine wave of data ranging from -1 to 1
                     Console.WriteLine("Initializing Sine Wave Data Events");
                     List<SineData> wave = new List<SineData>();
                     DateTime current = new DateTime();
@@ -116,7 +115,7 @@ namespace EDSTest
                     var returnData = new List<SineData>();
                     CheckIfResponseWasSuccessful(responseDataEgress);
 
-                    // step 4 
+                    // Step 4 
                     // read in the data from the stream
                     Console.WriteLine("Ingressing Sine Wave Data");
                     var responseDataIngress = await httpClient.GetAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{sineWaveStream.Id}/Data?startIndex={wave[0].Timestamp}&count=100");
@@ -143,8 +142,8 @@ namespace EDSTest
                         Console.Write(responseDataIngress);
                     }
 
-                    // step 5 
-                    // create new filtered sine wave stream
+                    // Step 5 
+                    // create new FilteredSineWaveStream
                     SdsStream filteredSineWaveStream = new SdsStream
                     {
                         TypeId = sineWaveType.Id,
@@ -155,7 +154,10 @@ namespace EDSTest
                     StringContent filteredStream = new StringContent(JsonSerializer.Serialize(filteredSineWaveStream));
                     HttpResponseMessage filteredResponseStream =
                         await httpClient.PostAsync($"http://localhost:5590/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{filteredSineWaveStream.Id}", filteredStream);
-                    CheckIfResponseWasSuccessful(filteredResponseStream); 
+                    CheckIfResponseWasSuccessful(filteredResponseStream);
+
+                    // Step 6 
+                    // populate FilteredSineWaveStream
                     List<SineData> filteredWave = new List<SineData>();
                     int numberOfValidValues = 0;
                     Console.WriteLine("Filtering Data");
@@ -175,7 +177,7 @@ namespace EDSTest
                         await httpClient.PostAsync($"http://localhost:5590/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{filteredSineWaveStream.Id}/Data", filteredData);
                     CheckIfResponseWasSuccessful(responseFilteredDataEgress);
 
-                    // step 6 - Delete Streams and Types
+                    // Step 7 - Delete Streams and Types
                     Console.WriteLine("Deleting SineWave Stream");
                     HttpResponseMessage responseDeleteWaveStream =
                         await httpClient.DeleteAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{sineWaveStream.Id}");
