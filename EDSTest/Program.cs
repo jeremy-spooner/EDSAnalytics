@@ -13,6 +13,10 @@ namespace EDSFilter
 {
     public class Program
     {
+        public static string port;
+        public static string tenantId;
+        public static string namespaceId;
+        public static string apiVersion;
 
         public static void Main()
         {
@@ -28,10 +32,10 @@ namespace EDSFilter
             IConfiguration configuration = builder.Build();
 
             // ==== Client constants ====
-            string port = configuration["EDSPort"];
-            string tenantId = configuration["TenantId"];
-            string namespaceId = configuration["NamespaceId"];
-            string apiVersion = configuration["apiVersion"];
+            port = configuration["EDSPort"];
+            tenantId = configuration["TenantId"];
+            namespaceId = configuration["NamespaceId"];
+            apiVersion = configuration["apiVersion"];
 
             using (HttpClient httpClient = new HttpClient())
             {
@@ -90,11 +94,7 @@ namespace EDSFilter
                         Name = "SineWave"
                     };
 
-                    Console.WriteLine("Creating SineWave Stream");
-                    StringContent stream = new StringContent(JsonSerializer.Serialize(sineWaveStream));
-                    HttpResponseMessage responseStream = 
-                        await httpClient.PostAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{sineWaveStream.Id}", stream);
-                    CheckIfResponseWasSuccessful(responseStream);
+                    await CreateStream(sineWaveStream);
                     
                     // Step 3  
                     // create events with a sine wave of data ranging from -1 to 1
@@ -108,19 +108,15 @@ namespace EDSFilter
                         newEvent.Timestamp = current.AddSeconds(i).ToString("o");
                         wave.Add(newEvent);
                     }
-                    Console.WriteLine("Creating Sine Wave Data");
-                    StringContent data = new StringContent(JsonSerializer.Serialize(wave));
-                    HttpResponseMessage responseDataEgress = 
-                        await httpClient.PostAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{sineWaveStream.Id}/Data", data);
-                    var returnData = new List<SineData>();
-                    CheckIfResponseWasSuccessful(responseDataEgress);
+                    await WriteDataToStream(wave, sineWaveStream);
 
                     // Step 4 
                     // read in the data from the stream
                     Console.WriteLine("Ingressing Sine Wave Data");
                     var responseDataIngress = await httpClient.GetAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{sineWaveStream.Id}/Data?startIndex={wave[0].Timestamp}&count=100");
                     CheckIfResponseWasSuccessful(responseDataIngress);
-                    var responseBody = await responseDataIngress.Content.ReadAsStreamAsync();  
+                    var responseBody = await responseDataIngress.Content.ReadAsStreamAsync();
+                    var returnData = new List<SineData>();
                     // since the return values are in gzip, they must be decoded
                     if (responseDataIngress.Content.Headers.ContentEncoding.Contains("gzip"))
                     {
@@ -150,11 +146,7 @@ namespace EDSFilter
                         Id = "FilteredSineWave",
                         Name = "FilteredSineWave"
                     };
-                    Console.WriteLine("Creating FilteredSineWave Stream");
-                    StringContent filteredStream = new StringContent(JsonSerializer.Serialize(filteredSineWaveStream));
-                    HttpResponseMessage filteredResponseStream =
-                        await httpClient.PostAsync($"http://localhost:5590/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{filteredSineWaveStream.Id}", filteredStream);
-                    CheckIfResponseWasSuccessful(filteredResponseStream);
+                    await CreateStream(filteredSineWaveStream);
 
                     // Step 6 
                     // populate FilteredSineWaveStream
@@ -171,25 +163,20 @@ namespace EDSFilter
                             numberOfValidValues++;
                         }
                     }
+                    await WriteDataToStream(filteredWave, filteredSineWaveStream);
+                    /*
                     Console.WriteLine("Creating Filtered Sine Wave Data");
                     StringContent filteredData = new StringContent(JsonSerializer.Serialize(filteredWave));
                     HttpResponseMessage responseFilteredDataEgress =
-                        await httpClient.PostAsync($"http://localhost:5590/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{filteredSineWaveStream.Id}/Data", filteredData);
+                        await httpClient.PostAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{filteredSineWaveStream.Id}/Data", filteredData);
                     CheckIfResponseWasSuccessful(responseFilteredDataEgress);
+                    */
 
                     // Step 7 - Delete Streams and Types
-                    Console.WriteLine("Deleting SineWave Stream");
-                    HttpResponseMessage responseDeleteWaveStream =
-                        await httpClient.DeleteAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{sineWaveStream.Id}");
-                    CheckIfResponseWasSuccessful(responseDeleteWaveStream);
-                    Console.WriteLine("Deleting FilteredSineWave Stream");
-                    HttpResponseMessage responseDeleteFilteredWaveStream =
-                        await httpClient.DeleteAsync($"http://localhost:5590/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{filteredSineWaveStream.Id}");
-                    CheckIfResponseWasSuccessful(responseDeleteFilteredWaveStream);
-                    Console.WriteLine("Deleting SineWave Type");
-                    HttpResponseMessage responseDeleteType =
-                        await httpClient.DeleteAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Types/{sineWaveType.Id}");
-                    CheckIfResponseWasSuccessful(responseDeleteType);
+                    await DeleteStream(sineWaveStream);
+                    await DeleteStream(filteredSineWaveStream);
+                    await DeleteType(sineWaveType);
+
                 }
                 catch (Exception e)
                 {
@@ -205,6 +192,51 @@ namespace EDSFilter
             if (!response.IsSuccessStatusCode)
             {
                 throw new HttpRequestException(response.ToString());
+            }
+        }
+
+        private static async Task DeleteStream(SdsStream stream)
+        {
+            using (HttpClient httpClient = new HttpClient())
+            {
+                Console.WriteLine("Deleting " + stream.Id + " Stream");
+                HttpResponseMessage responseDeleteStream = 
+                    await httpClient.DeleteAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{stream.Id}");
+                CheckIfResponseWasSuccessful(responseDeleteStream);
+            }
+        }
+        private static async Task DeleteType(SdsType type)
+        {
+            using (HttpClient httpClient = new HttpClient())
+            {
+                Console.WriteLine("Deleting " + type.Id + " Type");
+                HttpResponseMessage responseDeleteType =
+                    await httpClient.DeleteAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Types/{type.Id}");
+                CheckIfResponseWasSuccessful(responseDeleteType);
+            }
+        }
+
+        private static async Task CreateStream(SdsStream stream) 
+        {
+            using (HttpClient httpClient = new HttpClient())
+            {
+                Console.WriteLine("Creating " + stream.Id + " Stream");
+                StringContent stringStream = new StringContent(JsonSerializer.Serialize(stream));
+                HttpResponseMessage responseCreateStream =
+                    await httpClient.PostAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{stream.Id}", stringStream);
+                CheckIfResponseWasSuccessful(responseCreateStream);
+            }
+        }
+
+        private static async Task WriteDataToStream(List<SineData> list, SdsStream stream)
+        {
+            using (HttpClient httpClient = new HttpClient())
+            {
+                Console.WriteLine("Writing Data to " + stream.Id + " stream");
+                StringContent serializedData = new StringContent(JsonSerializer.Serialize(list));
+                HttpResponseMessage responseWriteDataToStream =
+                    await httpClient.PostAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{stream.Id}/Data", serializedData);
+                CheckIfResponseWasSuccessful(responseWriteDataToStream); 
             }
         }
     }
