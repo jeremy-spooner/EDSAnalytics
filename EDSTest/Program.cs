@@ -93,7 +93,6 @@ namespace EDSFilter
                         Id = "SineWave",
                         Name = "SineWave"
                     };
-
                     await CreateStream(sineWaveStream);
                     
                     // Step 3  
@@ -134,8 +133,7 @@ namespace EDSFilter
                     }
                     else
                     {
-                        // if count is changed to 1 then this statement will be reached because the response will not be in gzip format
-                        Console.Write(responseDataIngress);
+                        Console.Write("Count must be greater than one");
                     }
 
                     // Step 5 
@@ -164,24 +162,21 @@ namespace EDSFilter
                         }
                     }
                     await WriteDataToStream(filteredWave, filteredSineWaveStream);
-                    /*
-                    Console.WriteLine("Creating Filtered Sine Wave Data");
-                    StringContent filteredData = new StringContent(JsonSerializer.Serialize(filteredWave));
-                    HttpResponseMessage responseFilteredDataEgress =
-                        await httpClient.PostAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{filteredSineWaveStream.Id}/Data", filteredData);
-                    CheckIfResponseWasSuccessful(responseFilteredDataEgress);
-                    */
 
                     // Step 7 - Delete Streams and Types
                     await DeleteStream(sineWaveStream);
                     await DeleteStream(filteredSineWaveStream);
                     await DeleteType(sineWaveType);
-
                 }
                 catch (Exception e)
                 {
                     Console.WriteLine(e.Message);
                     throw e;
+                }
+                finally
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("Demo Application Ran Successfully!");
                 }
             }
             return true;
@@ -205,6 +200,7 @@ namespace EDSFilter
                 CheckIfResponseWasSuccessful(responseDeleteStream);
             }
         }
+
         private static async Task DeleteType(SdsType type)
         {
             using (HttpClient httpClient = new HttpClient())

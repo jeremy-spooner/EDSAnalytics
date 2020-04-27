@@ -84,6 +84,4 @@ be any type of filter. The data is loaded into a new list of SineWave objects an
 Step 7
 - The Types and Streams creatied by the application are deleted.
 
-## Automated Test Contents
 
-- The automated test checks the user's connection to EDS and ability to read/write to it.
