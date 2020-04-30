@@ -11,7 +11,7 @@
 
 ## Running the sample
 
-### Prerequisites
+### Prerequisites  
 
 - Have EDS installed and running on local machine.
 

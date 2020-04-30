@@ -56,17 +56,8 @@ namespace EDSFilter
                         }
                     };
                     // create Value property
-                    SdsTypeProperty value = new SdsTypeProperty
-                    {
-                        Id = "Value",
-                        Name = "Value",
-                        IsKey = false,
-                        SdsType = new SdsType
-                        {
-                            Name = "Double",
-                            SdsTypeCode = 14
-                        }
-                    };
+                    // new SdsTypeProperty() value = CreateSdsTypePropertyOfTypeDouble("Value", false);
+                    // SdsTypeProperty value = new SdsTypeProperty
                     // create SineWave type
                     SdsType sineWaveType = new SdsType
                     {
@@ -76,14 +67,10 @@ namespace EDSFilter
                         Properties = new List<SdsTypeProperty>()
                         {
                             timestamp,
-                            value
+                            CreateSdsTypePropertyOfTypeDouble("Value", false)
                         }
                     };
-                    Console.WriteLine("Creating SineWave Type");
-                    StringContent type = new StringContent(JsonSerializer.Serialize(sineWaveType));
-                    HttpResponseMessage responseType = 
-                        await httpClient.PostAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Types/{sineWaveType.Id}", type);
-                    CheckIfResponseWasSuccessful(responseType);
+                    await CreateType(sineWaveType);
 
                     // Step 2
                     // create sine wave stream                   
@@ -101,7 +88,8 @@ namespace EDSFilter
                     List<SineData> wave = new List<SineData>();
                     DateTime current = new DateTime();
                     current = DateTime.UtcNow;
-                    for (int i = 0; i < 100; i++)
+                    int count = 100;
+                    for (int i = 0; i < count; i++)
                     {
                         SineData newEvent = new SineData(i);
                         newEvent.Timestamp = current.AddSeconds(i).ToString("o");
@@ -112,7 +100,7 @@ namespace EDSFilter
                     // Step 4 
                     // read in the data from the stream
                     Console.WriteLine("Ingressing Sine Wave Data");
-                    var responseDataIngress = await httpClient.GetAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{sineWaveStream.Id}/Data?startIndex={wave[0].Timestamp}&count=100");
+                    var responseDataIngress = await httpClient.GetAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{sineWaveStream.Id}/Data?startIndex={wave[0].Timestamp}&count={count}");
                     CheckIfResponseWasSuccessful(responseDataIngress);
                     var responseBody = await responseDataIngress.Content.ReadAsStreamAsync();
                     var returnData = new List<SineData>();
@@ -151,7 +139,7 @@ namespace EDSFilter
                     List<SineData> filteredWave = new List<SineData>();
                     int numberOfValidValues = 0;
                     Console.WriteLine("Filtering Data");
-                    for (int i = 0; i < 100; i++)
+                    for (int i = 0; i < count; i++)
                     {
                         // filters the data to only include values outside the range -0.9 to 0.9 
                         // change this conditional to apply the type of filter you desire
@@ -163,10 +151,75 @@ namespace EDSFilter
                     }
                     await WriteDataToStream(filteredWave, filteredSineWaveStream);
 
+
+                    // ====================== Data Aggregation portion ======================
+                    
+                    // Step 1 - calculate Mean median and mode
+                    Console.WriteLine("Calculating Mean, median, min, max, and range");
+                    double mean = returnData.Average(returnData => returnData.Value);
+                    Console.WriteLine("Mean = " + mean);
+
+                    var values = new List<double>();
+                    for (int i = 0; i < count; i++)
+                    {
+                        values.Add(returnData[i].Value);
+                        numberOfValidValues++;
+                    }
+                    var median = CalculateMedian(values);
+                    Console.WriteLine("Median = " + median);
+                    var min = values.Min();
+                    Console.WriteLine("Min = " + min);
+                    var max = values.Max();
+                    Console.WriteLine("Max = " + max);
+                    var range = max - min;
+                    Console.WriteLine("Range = " + range);
+
+                    // Step 2 - create stream                   
+                    SdsType aggregatedDataType = new SdsType
+                    {
+                        Id = "AggregatedData",
+                        Name = "AggregatedData",
+                        SdsTypeCode = 1,
+                        Properties = new List<SdsTypeProperty>()
+                        {
+                            timestamp,
+                            CreateSdsTypePropertyOfTypeDouble("Mean", false),
+                            CreateSdsTypePropertyOfTypeDouble("Minimum", false),
+                            CreateSdsTypePropertyOfTypeDouble("Maximum", false),
+                            CreateSdsTypePropertyOfTypeDouble("Range", false)
+                        }
+                    };
+                    await CreateType(aggregatedDataType);
+
+                    SdsStream aggregatedDataStream = new SdsStream
+                    {
+                        TypeId = aggregatedDataType.Id,
+                        Id = "AggregatedData",
+                        Name = "AggregatedData"
+                    };
+
+                    await CreateStream(aggregatedDataStream);
+                    AggregateData calculated = new AggregateData
+                    {
+                        Timestamp = current.ToString("o"),
+                        Mean = mean,
+                        Minimum = min,
+                        Maximum = max,
+                        Range = range
+                    };
+                    List<AggregateData> cal = new List<AggregateData>();
+                    cal.Add(calculated);
+
+                    await WriteDataToStream(cal, aggregatedDataStream);
+
                     // Step 7 - Delete Streams and Types
-                    await DeleteStream(sineWaveStream);
-                    await DeleteStream(filteredSineWaveStream);
-                    await DeleteType(sineWaveType);
+                    
+                    //await DeleteStream(sineWaveStream);
+                    //await DeleteStream(filteredSineWaveStream);
+                    //await DeleteStream(aggregatedDataStream);
+                    //await DeleteType(sineWaveType);
+                    //await DeleteType(aggregatedDataType);
+                    
                 }
                 catch (Exception e)
                 {
@@ -224,6 +277,18 @@ namespace EDSFilter
             }
         }
 
+        private static async Task CreateType(SdsType type)
+        {
+            using (HttpClient httpClient = new HttpClient())
+            {
+                Console.WriteLine("Creating " + type.Id + " Type");
+                StringContent stringType = new StringContent(JsonSerializer.Serialize(type));
+                HttpResponseMessage responseType = 
+                    await httpClient.PostAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Types/{type.Id}", stringType);
+                CheckIfResponseWasSuccessful(responseType);
+            }
+        }
+
         private static async Task WriteDataToStream(List<SineData> list, SdsStream stream)
         {
             using (HttpClient httpClient = new HttpClient())
@@ -235,5 +300,48 @@ namespace EDSFilter
                 CheckIfResponseWasSuccessful(responseWriteDataToStream); 
             }
         }
+
+        private static async Task WriteDataToStream(List<AggregateData> list, SdsStream stream)
+        {
+            using (HttpClient httpClient = new HttpClient())
+            {
+                Console.WriteLine("Writing Data to " + stream.Id + " stream");
+                StringContent serializedData = new StringContent(JsonSerializer.Serialize(list));
+                HttpResponseMessage responseWriteDataToStream =
+                    await httpClient.PostAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{stream.Id}/Data", serializedData);
+                CheckIfResponseWasSuccessful(responseWriteDataToStream);
+            }
+        }
+        private static double CalculateMedian(List<double> list)
+        {
+            int numberCount = list.Count();
+            int halfIndex = list.Count() / 2;
+            var sortedNumbers = list.OrderBy(n => n);
+            if ((numberCount % 2) == 0)
+            {
+                return ((sortedNumbers.ElementAt(halfIndex) + sortedNumbers.ElementAt((halfIndex - 1))) / 2);
+            }
+            else
+            {
+                return sortedNumbers.ElementAt(halfIndex);
+            }
+        }
+
+        private static SdsTypeProperty CreateSdsTypePropertyOfTypeDouble(string idAndName, bool isKey)
+        {
+            SdsTypeProperty property = new SdsTypeProperty
+            {
+                Id = idAndName,
+                Name = idAndName,
+                IsKey = isKey,
+                SdsType = new SdsType
+                {
+                    Name = "Double",
+                    SdsTypeCode = 14
+                }
+            };
+            return property;
+        }
+
     }
 }
