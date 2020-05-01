@@ -170,34 +170,30 @@ namespace EDSFilter
                     await CreateType(aggregatedDataType);
 
                     // Step 8 - create CalculatedAggregatedData stream
-                    SdsStream edsApiAggregatedDataStream = new SdsStream
+                    SdsStream calculatedAggregatedDataStream = new SdsStream
                     {
                         TypeId = aggregatedDataType.Id,
-                        Id = "EdsApiAggregatedData",
-                        Name = "EdsApiAggregatedData"
+                        Id = "CalculatedAggregatedData",
+                        Name = "CalculatedAggregatedData"
                     };
-                    await CreateStream(edsApiAggregatedDataStream);
+                    await CreateStream(calculatedAggregatedDataStream);
 
                     // Step 9 - calculate mean, min, max, and range using c# libraries and send to DataAggregation Stream
                     Console.WriteLine("Calculating mean, min, max, and range");
                     double mean = returnData.Average(returnData => returnData.Value);
                     Console.WriteLine("Mean = " + mean);
-
                     var values = new List<double>();
                     for (int i = 0; i < count; i++)
                     {
                         values.Add(returnData[i].Value);
                         numberOfValidValues++;
                     }
-                    var median = CalculateMedian(values);
-                    Console.WriteLine("Median = " + median);
                     var min = values.Min();
                     Console.WriteLine("Min = " + min);
                     var max = values.Max();
                     Console.WriteLine("Max = " + max);
                     var range = max - min;
-                    Console.WriteLine("Range = " + range);
-
+                    Console.WriteLine("Range = " + range);         
                     AggregateData calculated = new AggregateData
                     {
                         Timestamp = current.ToString("o"),
@@ -206,38 +202,45 @@ namespace EDSFilter
                         Maximum = max,
                         Range = range
                     };
-                    
-                    List<AggregateData> cal = new List<AggregateData>();
-                    cal.Add(calculated);
-                    await WriteDataToStream(cal, calculatedAggregatedDataStream);
+                    await WriteDataToStream(calculated, calculatedAggregatedDataStream);
 
-                    /*
-                    var edsDataAggregation =
+                    SdsStream edsApiAggregatedDataStream = new SdsStream
+                    {
+                        TypeId = aggregatedDataType.Id,
+                        Id = "EdsApiAggregatedData",
+                        Name = "EdsApiAggregatedData"
+                    };
+                    await CreateStream(edsApiAggregatedDataStream);
+
+
+                    var edsDataAggregationIngress =
                         await httpClient.GetAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{sineWaveStream.Id}" +
-                        $"/Data/Summaries?startIndex={calculated.Timestamp}&endIndex=2020-04-30T23:00:00&count=1");
-                    CheckIfResponseWasSuccessful(responseDataIngress);
-                    var responseBodyDataAggregation = await responseDataIngress.Content.ReadAsStreamAsync();
-                    var returnDataAggregation = new List<SineData>(); 
-                    // since the return values are in gzip, they must be decoded
-                    if (responseDataIngress.Content.Headers.ContentEncoding.Contains("gzip"))
+                        $"/Data/Summaries?startIndex={calculated.Timestamp}&endIndex=2020-05-01T23:00:00&count=1");
+                    Console.WriteLine(edsDataAggregationIngress);
+                    CheckIfResponseWasSuccessful(edsDataAggregationIngress);
+                    var responseBodyDataAggregation = await edsDataAggregationIngress.Content.ReadAsStreamAsync();
+                    var destination2 = new MemoryStream();
+                    using (var decompressor = (Stream)new GZipStream(responseBodyDataAggregation, CompressionMode.Decompress, true))
                     {
-                        var destination = new MemoryStream();
-                        using (var decompressor = (Stream)new GZipStream(responseBody, CompressionMode.Decompress, true))
-                        {
-                            decompressor.CopyToAsync(destination).Wait();
-                        }
-                        destination.Seek(0, SeekOrigin.Begin);
-                        var requestContent = destination;
-                        using (var sr = new StreamReader(requestContent))
-                        {
-                            returnData = await JsonSerializer.DeserializeAsync<List<SineData>>(requestContent);
-                        }
+                        decompressor.CopyToAsync(destination2).Wait();
                     }
-                    else
+                    destination2.Seek(0, SeekOrigin.Begin);
+                    var requestContent2 = destination2;
+                    using (var sr = new StreamReader(requestContent2))
                     {
-                        Console.Write("Count must be greater than one");
+                        var returnDataAggregation = await JsonSerializer.DeserializeAsync<object>(requestContent2);
+                        string stringReturn = returnDataAggregation.ToString();
+                        AggregateData edsApi = new AggregateData
+                        {
+                            Timestamp = current.ToString("o"),
+                            Mean = GetValue(stringReturn, "Mean"),
+                            Minimum = GetValue(stringReturn, "Minimum"),
+                            Maximum = GetValue(stringReturn, "Maximum"),
+                            Range = GetValue(stringReturn, "Range")
+                        };
+
+
                     }
-                    */
 
                     Console.WriteLine();
                     Console.WriteLine("==================== Clean-Up =====================");
@@ -245,7 +248,8 @@ namespace EDSFilter
 
                     await DeleteStream(sineWaveStream);
                     await DeleteStream(filteredSineWaveStream);
-                    await DeleteStream(aggregatedDataStream);
+                    await DeleteStream(calculatedAggregatedDataStream);
+                    await DeleteStream(edsApiAggregatedDataStream);
                     await DeleteType(sineWaveType);
                     await DeleteType(aggregatedDataType);
                     
@@ -330,29 +334,17 @@ namespace EDSFilter
             }
         }
 
-        private static async Task WriteDataToStream(List<AggregateData> list, SdsStream stream)
+        private static async Task WriteDataToStream(AggregateData data, SdsStream stream)
         {
             using (HttpClient httpClient = new HttpClient())
             {
+                List<AggregateData> dataList = new List<AggregateData>();
+                dataList.Add(data);
                 Console.WriteLine("Writing Data to " + stream.Id + " stream");
-                StringContent serializedData = new StringContent(JsonSerializer.Serialize(list));
+                StringContent serializedData = new StringContent(JsonSerializer.Serialize(dataList));
                 HttpResponseMessage responseWriteDataToStream =
                     await httpClient.PostAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{stream.Id}/Data", serializedData);
                 CheckIfResponseWasSuccessful(responseWriteDataToStream);
-            }
-        }
-        private static double CalculateMedian(List<double> list)
-        {
-            int numberCount = list.Count();
-            int halfIndex = list.Count() / 2;
-            var sortedNumbers = list.OrderBy(n => n);
-            if ((numberCount % 2) == 0)
-            {
-                return ((sortedNumbers.ElementAt(halfIndex) + sortedNumbers.ElementAt((halfIndex - 1))) / 2);
-            }
-            else
-            {
-                return sortedNumbers.ElementAt(halfIndex);
             }
         }
 
@@ -370,6 +362,14 @@ namespace EDSFilter
                 }
             };
             return property;
+        }
+
+        private static double GetValue(string jsn, string property)
+        {
+            int meanStartIndex = jsn.IndexOf(property);
+            double meanDouble = Convert.ToDouble(jsn.Substring(meanStartIndex + 11 + property.Length, 16));
+            Console.WriteLine(property + " = " + meanDouble);
+            return meanDouble;
         }
 
     }
