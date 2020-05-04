@@ -180,7 +180,7 @@ namespace EDSFilter
 
                     // Step 9 - calculate mean, min, max, and range using c# libraries and send to DataAggregation Stream
                     Console.WriteLine("Calculating mean, min, max, and range");
-                    double mean = returnData.Average(returnData => returnData.Value);
+                    double mean = returnData.Average(rd => rd.Value);
                     Console.WriteLine("Mean = " + mean);
                     var values = new List<double>();
                     for (int i = 0; i < count; i++)
