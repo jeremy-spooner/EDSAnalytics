@@ -84,7 +84,7 @@ namespace EDSFilter
                     List<SineData> wave = new List<SineData>();
                     DateTime current = new DateTime();
                     current = DateTime.UtcNow;
-                    int count = 100;
+                    int count = 20;
                     for (int i = 0; i < count; i++)
                     {
                         SineData newEvent = new SineData(i);
@@ -95,24 +95,24 @@ namespace EDSFilter
 
                     // Step 4 - read in the sine wave data from the SineWave stream
                     Console.WriteLine("Ingressing Sine Wave Data");
-                    var responseDataIngress = 
+                    var responseSineDataIngress = 
                         await httpClient.GetAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{sineWaveStream.Id}/Data?startIndex={wave[0].Timestamp}&count={count}");
-                    CheckIfResponseWasSuccessful(responseDataIngress);
-                    var responseBody = await responseDataIngress.Content.ReadAsStreamAsync();
-                    var returnData = new List<SineData>();
+                    CheckIfResponseWasSuccessful(responseSineDataIngress);
+                    var responseBodySineData = await responseSineDataIngress.Content.ReadAsStreamAsync();
+                    var returnData = new List<SineData>(); 
                     // since the return values are in gzip, they must be decoded
-                    if (responseDataIngress.Content.Headers.ContentEncoding.Contains("gzip"))
+                    if (responseSineDataIngress.Content.Headers.ContentEncoding.Contains("gzip"))
                     {
-                        var destination = new MemoryStream();
-                        using (var decompressor = (Stream)new GZipStream(responseBody, CompressionMode.Decompress, true))
+                        var sineDataDestination = new MemoryStream();
+                        using (var decompressor = (Stream)new GZipStream(responseBodySineData, CompressionMode.Decompress, true))
                         {
-                            decompressor.CopyToAsync(destination).Wait();
+                            decompressor.CopyToAsync(sineDataDestination).Wait();
                         }
-                        destination.Seek(0, SeekOrigin.Begin);
-                        var requestContent = destination;
-                        using (var sr = new StreamReader(requestContent))
+                        sineDataDestination.Seek(0, SeekOrigin.Begin);
+                        var sineDataRequestContent = sineDataDestination;
+                        using (var sr = new StreamReader(sineDataRequestContent))
                         {
-                            returnData = await JsonSerializer.DeserializeAsync<List<SineData>>(requestContent);                  
+                            returnData = await JsonSerializer.DeserializeAsync<List<SineData>>(sineDataRequestContent);                  
                         }
                     }
                     else
@@ -194,7 +194,7 @@ namespace EDSFilter
                     Console.WriteLine("Max = " + max);
                     var range = max - min;
                     Console.WriteLine("Range = " + range);         
-                    AggregateData calculated = new AggregateData
+                    AggregateData calculatedData = new AggregateData
                     {
                         Timestamp = current.ToString("o"),
                         Mean = mean,
@@ -202,8 +202,9 @@ namespace EDSFilter
                         Maximum = max,
                         Range = range
                     };
-                    await WriteDataToStream(calculated, calculatedAggregatedDataStream);
+                    await WriteDataToStream(calculatedData, calculatedAggregatedDataStream);
 
+                    // Step 10 - create EdsApiAggregatedData stream
                     SdsStream edsApiAggregatedDataStream = new SdsStream
                     {
                         TypeId = aggregatedDataType.Id,
@@ -212,24 +213,25 @@ namespace EDSFilter
                     };
                     await CreateStream(edsApiAggregatedDataStream);
 
-
+                    // Step 11 - Uses EDS’s standard data aggregate API calls to ingress aggregation data calculated by EDS
                     var edsDataAggregationIngress =
                         await httpClient.GetAsync($"http://localhost:{port}/api/{apiVersion}/Tenants/{tenantId}/Namespaces/{namespaceId}/Streams/{sineWaveStream.Id}" +
-                        $"/Data/Summaries?startIndex={calculated.Timestamp}&endIndex=2020-05-01T23:00:00&count=1");
-                    Console.WriteLine(edsDataAggregationIngress);
+                        $"/Data/Summaries?startIndex={calculatedData.Timestamp}&endIndex={current.AddMinutes(count).ToString("o")}&count=1");
                     CheckIfResponseWasSuccessful(edsDataAggregationIngress);
                     var responseBodyDataAggregation = await edsDataAggregationIngress.Content.ReadAsStreamAsync();
-                    var destination2 = new MemoryStream();
+                    // since response is gzipped, it must be decoded
+                    var destinationAggregatedData = new MemoryStream();
                     using (var decompressor = (Stream)new GZipStream(responseBodyDataAggregation, CompressionMode.Decompress, true))
                     {
-                        decompressor.CopyToAsync(destination2).Wait();
+                        decompressor.CopyToAsync(destinationAggregatedData).Wait();
                     }
-                    destination2.Seek(0, SeekOrigin.Begin);
-                    var requestContent2 = destination2;
-                    using (var sr = new StreamReader(requestContent2))
+                    destinationAggregatedData.Seek(0, SeekOrigin.Begin);
+                    var requestContentAggregatedData = destinationAggregatedData;
+                    using (var sr = new StreamReader(requestContentAggregatedData))
                     {
-                        var returnDataAggregation = await JsonSerializer.DeserializeAsync<object>(requestContent2);
+                        var returnDataAggregation = await JsonSerializer.DeserializeAsync<object>(requestContentAggregatedData);
                         string stringReturn = returnDataAggregation.ToString();
+                        // create a new aggregateData object from the api call
                         AggregateData edsApi = new AggregateData
                         {
                             Timestamp = current.ToString("o"),
@@ -238,20 +240,19 @@ namespace EDSFilter
                             Maximum = GetValue(stringReturn, "Maximum"),
                             Range = GetValue(stringReturn, "Range")
                         };
-
-
+                        await WriteDataToStream(edsApi, edsApiAggregatedDataStream);
                     }
 
                     Console.WriteLine();
                     Console.WriteLine("==================== Clean-Up =====================");
-                    // Step 7 - Delete Streams and Types
-
-                    await DeleteStream(sineWaveStream);
-                    await DeleteStream(filteredSineWaveStream);
-                    await DeleteStream(calculatedAggregatedDataStream);
-                    await DeleteStream(edsApiAggregatedDataStream);
-                    await DeleteType(sineWaveType);
-                    await DeleteType(aggregatedDataType);
+                    
+                    // Step 12 - Delete Streams and Types
+                    // await DeleteStream(sineWaveStream);
+                    // await DeleteStream(filteredSineWaveStream);
+                    // await DeleteStream(calculatedAggregatedDataStream);
+                    // await DeleteStream(edsApiAggregatedDataStream);
+                    // await DeleteType(sineWaveType);
+                    // await DeleteType(aggregatedDataType);
                     
                 }
                 catch (Exception e)
@@ -367,6 +368,7 @@ namespace EDSFilter
         private static double GetValue(string jsn, string property)
         {
             int meanStartIndex = jsn.IndexOf(property);
+            // until reaches zero
             double meanDouble = Convert.ToDouble(jsn.Substring(meanStartIndex + 11 + property.Length, 16));
             Console.WriteLine(property + " = " + meanDouble);
             return meanDouble;

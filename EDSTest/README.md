@@ -78,22 +78,28 @@ Step 5
 - Creates the FilteredSineWave stream using SDS.
 
 Step 6
-- The filter is a deadband filter that accepts only data greater than 0.9 or less than -0.9. This step can be altered to be any type of filter. The data is loaded into a new list of SineWave objects and is sent to the FilteredSineWave stream.
+- The filter is a deadband filter that accepts only data greater than 0.9 or less than -0.9. This step can be altered to be any type of filter. The data is copied into a new list of SineWave objects and is sent to the FilteredSineWave stream.
 
 ### Data Aggregation
 
 This portion will read data from a stream of sine wave points, calculate the mean, minimum, maximum, and range, and write the result to a new stream. It also uses EDS’s standard data aggregate API calls to return the mean, minimum, maximum, and standard deviation. For more information on the EDS’s standard data aggregate API reference: [EDS Summaries]( https://osisoft.github.io/Edge-Data-Store-Docs/V1/SDS/Reading_Data_API.html#get-summaries)
 
-
 Step 7
 - Creates the AggregatedData type using SDS.
+
 Step 8
 - Creates the CalculatedAggregatedData stream using SDS.
+
 Step 9
 - Calculates mean, minimum, maximum, and range using standard c# functions. This data is sent to the AggregatedData stream using SDS.
 
 Step 10
 - Creates the EdsApiAggregatedData stream using SDS
+
 Step 11
-- Data is ingressed from EDS’s standard data aggregate API calls and stored in an object. Since data is encoded using GZIP, some decoding is necessary.
+- Data is ingressed from EDS’s standard data aggregate API calls and stored in an object. Since data is encoded using GZIP, some decoding is completed to extract the mean, minimum, maximum, and range. This data is copied into an AggregateData object and sent to the EdsApiAggregatedData stream
+
+Step 12 
+- The Types and Streams created by the application are deleted.
+
 
