@@ -247,12 +247,12 @@ namespace EDSFilter
                     Console.WriteLine("==================== Clean-Up =====================");
                     
                     // Step 12 - Delete Streams and Types
-                    // await DeleteStream(sineWaveStream);
-                    // await DeleteStream(filteredSineWaveStream);
-                    // await DeleteStream(calculatedAggregatedDataStream);
-                    // await DeleteStream(edsApiAggregatedDataStream);
-                    // await DeleteType(sineWaveType);
-                    // await DeleteType(aggregatedDataType);
+                    await DeleteStream(sineWaveStream);
+                    await DeleteStream(filteredSineWaveStream);
+                    await DeleteStream(calculatedAggregatedDataStream);
+                    await DeleteStream(edsApiAggregatedDataStream);
+                    await DeleteType(sineWaveType);
+                    await DeleteType(aggregatedDataType);
                     
                 }
                 catch (Exception e)
