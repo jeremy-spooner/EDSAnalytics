@@ -15,7 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\EDSTest\EDSFilter.csproj" />
+    <ProjectReference Include="..\EDSTest\EDSAnalytics.csproj" />
   </ItemGroup>
 
 </Project>

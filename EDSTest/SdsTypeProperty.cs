@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace EDSFilter
+namespace EDSAnalytics
 {
     class SdsTypeProperty
     {

@@ -9,9 +9,9 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Json;
 
-namespace EDSFilter
+namespace EDSAnalytics
 {
-    public class Program
+    public class Program 
     {
         public static string port;
         public static string tenantId;
@@ -26,7 +26,7 @@ namespace EDSFilter
         {
             Console.WriteLine("Getting configuration from appsettings.json");
             IConfigurationBuilder builder = new ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
+                .SetBasePath(Directory.GetCurrentDirectory()) 
                 .AddJsonFile("appsettings.json")
                 .AddJsonFile("appsettings.test.json", optional: true);
             IConfiguration configuration = builder.Build();
