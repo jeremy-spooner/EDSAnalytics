@@ -13,10 +13,10 @@ namespace EDSAnalytics
 {
     public class Program 
     {
-        public static string port;
-        public static string tenantId;
-        public static string namespaceId;
-        public static string apiVersion;
+        private static string port;
+        private static string tenantId;
+        private static string namespaceId;
+        private static string apiVersion;
 
         public static void Main()
         {
